@@ -4,8 +4,9 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Regional coverage by theme</title>
+  <title>Regional Coverage by Theme</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.9.0/d3.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/d3-geo-projection@4"></script>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Nunito+Sans:wght@300;400;600;700;900&display=swap"
     rel="stylesheet">
@@ -46,7 +47,7 @@
     }
 
     #app {
-      max-width: 1200px;
+      /* max-width: 1000px; */
       margin: 0 auto;
       padding: 2rem 1.5rem 4rem;
     }
@@ -100,19 +101,28 @@
     }
 
     /* MAP */
-    #map-container {
-      width: 100%;
-      position: relative;
+    #main-row {
+      display: flex;
+      gap: 1rem;
+      align-items: stretch;
       margin-bottom: 2rem;
-      border: 1px solid var(--border);
-      border-radius: 10px;
-      overflow: hidden;
-      background: #fff;
+      height: 80vh;
+    }
+
+    #map-container {
+      flex: 0 0 50%;
+      height: 70vh;
+      margin-bottom: 0;
+      display: flex;
+      flex-direction: column;
     }
 
     #map-svg {
       display: block;
       width: 100%;
+      flex: 1 1 0;
+      /* fill remaining height after legend */
+      min-height: 0;
     }
 
     .coastline {
@@ -185,13 +195,44 @@
     }
 
     /* DOTPLOT */
-    #dotplot-container {
+    #dotplots-row {
+      flex: 1 1 0;
+      display: flex;
+      flex-direction: column;
+      /* stack vertically instead of side by side */
+      gap: 1rem;
+      align-items: stretch;
+    }
+
+    .dotplot-col {
+      flex: 1 1 0;
+      /* each takes half the column height */
+      min-width: 0;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+    }
+
+    .dotplot-container {
+      flex: 1 1 0;
+      /* fill available height */
       width: 100%;
+      min-width: 0;
       border: 1px solid var(--border);
       border-radius: 10px;
       background: #fff;
       padding: 1.2rem 1.2rem 0.8rem;
-      overflow-x: none;
+      overflow-x: hidden;
+      /* both axes */
+    }
+
+    .dotplot-svg {
+      display: block;
+      overflow: visible;
+    }
+
+    #dotplot-container {
+      /* legacy — keep for backward compat if anything refs it */
     }
 
     #dotplot-svg {
@@ -234,16 +275,28 @@
   <div id="app">
     <header>
       <h1>Regional Coverage by Theme</h1>
-      <p>Circle areas are proportional to share of total items in each region. Hover to explore. Click legend to filter.
-      </p>
+      <p>Dorling cartogram — circle area proportional to share of total items in each region. Hover to explore. Click
+        legend to filter.</p>
     </header>
-    <div id="legend"></div>
-    <div id="map-container">
-      <svg id="map-svg"></svg>
-    </div>
-    <div class="section-label">Items by theme</div>
-    <div id="dotplot-container">
-      <svg id="dotplot-svg"></svg>
+    <div id="main-row">
+      <div id="map-container">
+        <div id="legend"></div>
+        <svg id="map-svg"></svg>
+      </div>
+      <div id="dotplots-row">
+        <div class="dotplot-col">
+          <div class="section-label">By theme</div>
+          <div class="dotplot-container" id="dotplot-theme-container">
+            <svg class="dotplot-svg" id="dotplot-svg"></svg>
+          </div>
+        </div>
+        <div class="dotplot-col">
+          <div class="section-label">By region</div>
+          <div class="dotplot-container" id="dotplot-region-container">
+            <svg class="dotplot-svg" id="dotplot-region-svg"></svg>
+          </div>
+        </div>
+      </div>
     </div>
   </div>
   <div id="tooltip"></div>
@@ -252,63 +305,8 @@
     // ─────────────────────────────────────────────
     // DATA
     // ─────────────────────────────────────────────
-    const RAW = {
-      "type": "FeatureCollection",
-      "name": "data_full_regions",
-      "crs": { "type": "name", "properties": { "name": "urn:ogc:def:crs:OGC:1.3:CRS84" } },
-      "features": [
-        { "type": "Feature", "properties": { "region": "Arctic", "theme": "Cybersecurity/Cybercrime", "n": 0, "perc": 0.0 }, "geometry": { "type": "Point", "coordinates": [-27.9076269826793, 72.433007781958679] } },
-        { "type": "Feature", "properties": { "region": "Arctic", "theme": "Education/Skills/Research", "n": 1, "perc": 0.25 }, "geometry": { "type": "Point", "coordinates": [-27.9076269826793, 72.433007781958679] } },
-        { "type": "Feature", "properties": { "region": "Arctic", "theme": "Infrastructure", "n": 3, "perc": 0.75 }, "geometry": { "type": "Point", "coordinates": [-27.9076269826793, 72.433007781958679] } },
-        { "type": "Feature", "properties": { "region": "Arctic", "theme": "Regulation/Governance/Political", "n": 0, "perc": 0.0 }, "geometry": { "type": "Point", "coordinates": [-27.9076269826793, 72.433007781958679] } },
-        { "type": "Feature", "properties": { "region": "Arctic", "theme": "Security/Military/Defence", "n": 0, "perc": 0.0 }, "geometry": { "type": "Point", "coordinates": [-27.9076269826793, 72.433007781958679] } },
-        { "type": "Feature", "properties": { "region": "Central Asia", "theme": "Cybersecurity/Cybercrime", "n": 0, "perc": 0.0 }, "geometry": { "type": "Point", "coordinates": [65.159021168261873, 46.157465972434778] } },
-        { "type": "Feature", "properties": { "region": "Central Asia", "theme": "Education/Skills/Research", "n": 1, "perc": 0.5 }, "geometry": { "type": "Point", "coordinates": [65.159021168261873, 46.157465972434778] } },
-        { "type": "Feature", "properties": { "region": "Central Asia", "theme": "Infrastructure", "n": 1, "perc": 0.5 }, "geometry": { "type": "Point", "coordinates": [65.159021168261873, 46.157465972434778] } },
-        { "type": "Feature", "properties": { "region": "Central Asia", "theme": "Regulation/Governance/Political", "n": 0, "perc": 0.0 }, "geometry": { "type": "Point", "coordinates": [65.159021168261873, 46.157465972434778] } },
-        { "type": "Feature", "properties": { "region": "Central Asia", "theme": "Security/Military/Defence", "n": 0, "perc": 0.0 }, "geometry": { "type": "Point", "coordinates": [65.159021168261873, 46.157465972434778] } },
-        { "type": "Feature", "properties": { "region": "EU Neighbourhood Countries", "theme": "Cybersecurity/Cybercrime", "n": 8, "perc": 0.10126582278481013 }, "geometry": { "type": "Point", "coordinates": [26.393772276520785, 53.427472261959863] } },
-        { "type": "Feature", "properties": { "region": "EU Neighbourhood Countries", "theme": "Education/Skills/Research", "n": 25, "perc": 0.31645569620253167 }, "geometry": { "type": "Point", "coordinates": [26.393772276520785, 53.427472261959863] } },
-        { "type": "Feature", "properties": { "region": "EU Neighbourhood Countries", "theme": "Infrastructure", "n": 11, "perc": 0.13924050632911392 }, "geometry": { "type": "Point", "coordinates": [26.393772276520785, 53.427472261959863] } },
-        { "type": "Feature", "properties": { "region": "EU Neighbourhood Countries", "theme": "Regulation/Governance/Political", "n": 27, "perc": 0.34177215189873417 }, "geometry": { "type": "Point", "coordinates": [26.393772276520785, 53.427472261959863] } },
-        { "type": "Feature", "properties": { "region": "EU Neighbourhood Countries", "theme": "Security/Military/Defence", "n": 8, "perc": 0.10126582278481013 }, "geometry": { "type": "Point", "coordinates": [26.393772276520785, 53.427472261959863] } },
-        { "type": "Feature", "properties": { "region": "Global", "theme": "Cybersecurity/Cybercrime", "n": 1, "perc": 0.030303030303030304 }, "geometry": { "type": "Point", "coordinates": [-42.903001645408587, 32.937970247165559] } },
-        { "type": "Feature", "properties": { "region": "Global", "theme": "Education/Skills/Research", "n": 6, "perc": 0.18181818181818182 }, "geometry": { "type": "Point", "coordinates": [-42.903001645408587, 32.937970247165559] } },
-        { "type": "Feature", "properties": { "region": "Global", "theme": "Infrastructure", "n": 2, "perc": 0.060606060606060608 }, "geometry": { "type": "Point", "coordinates": [-42.903001645408587, 32.937970247165559] } },
-        { "type": "Feature", "properties": { "region": "Global", "theme": "Regulation/Governance/Political", "n": 24, "perc": 0.72727272727272729 }, "geometry": { "type": "Point", "coordinates": [-42.903001645408587, 32.937970247165559] } },
-        { "type": "Feature", "properties": { "region": "Global", "theme": "Security/Military/Defence", "n": 0, "perc": 0.0 }, "geometry": { "type": "Point", "coordinates": [-42.903001645408587, 32.937970247165559] } },
-        { "type": "Feature", "properties": { "region": "Indo-Pacific (includes South-East Asia)", "theme": "Cybersecurity/Cybercrime", "n": 4, "perc": 0.081632653061224483 }, "geometry": { "type": "Point", "coordinates": [115.050680417807811, 0.580886088042671] } },
-        { "type": "Feature", "properties": { "region": "Indo-Pacific (includes South-East Asia)", "theme": "Education/Skills/Research", "n": 15, "perc": 0.30612244897959184 }, "geometry": { "type": "Point", "coordinates": [115.050680417807811, 0.580886088042671] } },
-        { "type": "Feature", "properties": { "region": "Indo-Pacific (includes South-East Asia)", "theme": "Infrastructure", "n": 12, "perc": 0.24489795918367346 }, "geometry": { "type": "Point", "coordinates": [115.050680417807811, 0.580886088042671] } },
-        { "type": "Feature", "properties": { "region": "Indo-Pacific (includes South-East Asia)", "theme": "Regulation/Governance/Political", "n": 16, "perc": 0.32653061224489793 }, "geometry": { "type": "Point", "coordinates": [115.050680417807811, 0.580886088042671] } },
-        { "type": "Feature", "properties": { "region": "Indo-Pacific (includes South-East Asia)", "theme": "Security/Military/Defence", "n": 2, "perc": 0.040816326530612242 }, "geometry": { "type": "Point", "coordinates": [115.050680417807811, 0.580886088042671] } },
-        { "type": "Feature", "properties": { "region": "MENA", "theme": "Cybersecurity/Cybercrime", "n": 3, "perc": 0.125 }, "geometry": { "type": "Point", "coordinates": [25.120316972947087, 23.550329371602665] } },
-        { "type": "Feature", "properties": { "region": "MENA", "theme": "Education/Skills/Research", "n": 7, "perc": 0.29166666666666669 }, "geometry": { "type": "Point", "coordinates": [25.120316972947087, 23.550329371602665] } },
-        { "type": "Feature", "properties": { "region": "MENA", "theme": "Infrastructure", "n": 3, "perc": 0.125 }, "geometry": { "type": "Point", "coordinates": [25.120316972947087, 23.550329371602665] } },
-        { "type": "Feature", "properties": { "region": "MENA", "theme": "Regulation/Governance/Political", "n": 9, "perc": 0.375 }, "geometry": { "type": "Point", "coordinates": [25.120316972947087, 23.550329371602665] } },
-        { "type": "Feature", "properties": { "region": "MENA", "theme": "Security/Military/Defence", "n": 2, "perc": 0.083333333333333329 }, "geometry": { "type": "Point", "coordinates": [25.120316972947087, 23.550329371602665] } },
-        { "type": "Feature", "properties": { "region": "North-East Asia", "theme": "Cybersecurity/Cybercrime", "n": 4, "perc": 0.14814814814814814 }, "geometry": { "type": "Point", "coordinates": [134.729965260853788, 40.26343596316876] } },
-        { "type": "Feature", "properties": { "region": "North-East Asia", "theme": "Education/Skills/Research", "n": 11, "perc": 0.40740740740740738 }, "geometry": { "type": "Point", "coordinates": [134.729965260853788, 40.26343596316876] } },
-        { "type": "Feature", "properties": { "region": "North-East Asia", "theme": "Infrastructure", "n": 2, "perc": 0.07407407407407407 }, "geometry": { "type": "Point", "coordinates": [134.729965260853788, 40.26343596316876] } },
-        { "type": "Feature", "properties": { "region": "North-East Asia", "theme": "Regulation/Governance/Political", "n": 8, "perc": 0.29629629629629628 }, "geometry": { "type": "Point", "coordinates": [134.729965260853788, 40.26343596316876] } },
-        { "type": "Feature", "properties": { "region": "North-East Asia", "theme": "Security/Military/Defence", "n": 2, "perc": 0.07407407407407407 }, "geometry": { "type": "Point", "coordinates": [134.729965260853788, 40.26343596316876] } },
-        { "type": "Feature", "properties": { "region": "North America", "theme": "Cybersecurity/Cybercrime", "n": 1, "perc": 0.058823529411764705 }, "geometry": { "type": "Point", "coordinates": [-102.596087114750901, 39.957027741646911] } },
-        { "type": "Feature", "properties": { "region": "North America", "theme": "Education/Skills/Research", "n": 6, "perc": 0.35294117647058826 }, "geometry": { "type": "Point", "coordinates": [-102.596087114750901, 39.957027741646911] } },
-        { "type": "Feature", "properties": { "region": "North America", "theme": "Infrastructure", "n": 3, "perc": 0.17647058823529413 }, "geometry": { "type": "Point", "coordinates": [-102.596087114750901, 39.957027741646911] } },
-        { "type": "Feature", "properties": { "region": "North America", "theme": "Regulation/Governance/Political", "n": 7, "perc": 0.41176470588235292 }, "geometry": { "type": "Point", "coordinates": [-102.596087114750901, 39.957027741646911] } },
-        { "type": "Feature", "properties": { "region": "North America", "theme": "Security/Military/Defence", "n": 0, "perc": 0.0 }, "geometry": { "type": "Point", "coordinates": [-102.596087114750901, 39.957027741646911] } },
-        { "type": "Feature", "properties": { "region": "South America", "theme": "Cybersecurity/Cybercrime", "n": 5, "perc": 0.125 }, "geometry": { "type": "Point", "coordinates": [-58.815280157120235, -13.583990759228028] } },
-        { "type": "Feature", "properties": { "region": "South America", "theme": "Education/Skills/Research", "n": 13, "perc": 0.325 }, "geometry": { "type": "Point", "coordinates": [-58.815280157120235, -13.583990759228028] } },
-        { "type": "Feature", "properties": { "region": "South America", "theme": "Infrastructure", "n": 9, "perc": 0.225 }, "geometry": { "type": "Point", "coordinates": [-58.815280157120235, -13.583990759228028] } },
-        { "type": "Feature", "properties": { "region": "South America", "theme": "Regulation/Governance/Political", "n": 13, "perc": 0.325 }, "geometry": { "type": "Point", "coordinates": [-58.815280157120235, -13.583990759228028] } },
-        { "type": "Feature", "properties": { "region": "South America", "theme": "Security/Military/Defence", "n": 0, "perc": 0.0 }, "geometry": { "type": "Point", "coordinates": [-58.815280157120235, -13.583990759228028] } },
-        { "type": "Feature", "properties": { "region": "Sub-Saharan Africa", "theme": "Cybersecurity/Cybercrime", "n": 4, "perc": 0.097560975609756101 }, "geometry": { "type": "Point", "coordinates": [23.181856419505319, -17.43709562492948] } },
-        { "type": "Feature", "properties": { "region": "Sub-Saharan Africa", "theme": "Education/Skills/Research", "n": 13, "perc": 0.31707317073170732 }, "geometry": { "type": "Point", "coordinates": [23.181856419505319, -17.43709562492948] } },
-        { "type": "Feature", "properties": { "region": "Sub-Saharan Africa", "theme": "Infrastructure", "n": 11, "perc": 0.26829268292682928 }, "geometry": { "type": "Point", "coordinates": [23.181856419505319, -17.43709562492948] } },
-        { "type": "Feature", "properties": { "region": "Sub-Saharan Africa", "theme": "Regulation/Governance/Political", "n": 11, "perc": 0.26829268292682928 }, "geometry": { "type": "Point", "coordinates": [23.181856419505319, -17.43709562492948] } },
-        { "type": "Feature", "properties": { "region": "Sub-Saharan Africa", "theme": "Security/Military/Defence", "n": 2, "perc": 0.04878048780487805 }, "geometry": { "type": "Point", "coordinates": [23.181856419505319, -17.43709562492948] } }
-      ]
-    }
+
+    let RAW, dotData, data;
 
     // ─────────────────────────────────────────────
     // CONSTANTS
@@ -356,17 +354,23 @@
     // ─────────────────────────────────────────────
     // DATA PREP
     // ─────────────────────────────────────────────
-    const data = RAW.features.map(f => ({
-      region: f.properties.region,
-      theme: f.properties.theme,
-      n: f.properties.n,
-      perc: f.properties.perc,
-      lng: f.geometry.coordinates[0],
-      lat: f.geometry.coordinates[1]
-    })).filter(d => d.n > 0); // only show non-zero circles
-
-    // Disaggregated project data — one entry per title × region
-    const dotData = [{ "title": "Polar Connect", "theme": "Infrastructure", "region": "North America" }, { "title": "Polar Connect", "theme": "Infrastructure", "region": "North-East Asia" }, { "title": "Polar Connect", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "Polar Connect", "theme": "Infrastructure", "region": "Arctic" }, { "title": "ESIWA +", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "ESIWA +", "theme": "Regulation/Governance/Political", "region": "North-East Asia" }, { "title": "ESIWA +", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "ESIWA +", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "Team Europe Central Asia initiative on digital connectivity", "theme": "Infrastructure", "region": "Central Asia" }, { "title": "Counter-Terrorism Information Exchange and Criminal Justice Responses II (CT INFLOW II)", "theme": "Cybersecurity/Cybercrime", "region": "MENA" }, { "title": "Counter-Terrorism Information Exchange and Criminal Justice Responses II (CT INFLOW II)", "theme": "Cybersecurity/Cybercrime", "region": "Sub-Saharan Africa" }, { "title": "GLACY-e project on Global Action on Cybercrime Enhanced", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "GLACY-e project on Global Action on Cybercrime Enhanced", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "GLACY-e project on Global Action on Cybercrime Enhanced", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "GLACY-e project on Global Action on Cybercrime Enhanced", "theme": "Cybersecurity/Cybercrime", "region": "South America" }, { "title": "GLACY-e project on Global Action on Cybercrime Enhanced", "theme": "Cybersecurity/Cybercrime", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "GLACY-e project on Global Action on Cybercrime Enhanced", "theme": "Cybersecurity/Cybercrime", "region": "Sub-Saharan Africa" }, { "title": "Far North Fiber Europe 1.", "theme": "Infrastructure", "region": "North America" }, { "title": "Far North Fiber Europe 1.", "theme": "Infrastructure", "region": "North-East Asia" }, { "title": "Far North Fiber Europe 1.", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "Far North Fiber Europe 1.", "theme": "Infrastructure", "region": "Arctic" }, { "title": "Tusass Connect 1,2,3", "theme": "Infrastructure", "region": "North America" }, { "title": "Tusass Connect 1,2,3", "theme": "Infrastructure", "region": "Arctic" }, { "title": "Tusass Connect 1,2,3", "theme": "Education/Skills/Research", "region": "North America" }, { "title": "Tusass Connect 1,2,3", "theme": "Education/Skills/Research", "region": "Arctic" }, { "title": "European Judicial Cybercrime Network (EJCN)", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "CyberSEE – Project on enhanced action on cybercrime and electronic evidence in South-East Europe and Türkiye", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "EU-Western Balkans Digital Dialogue", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "EU-Ukraine Cyber Dialogue", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Growth Plan for the Western Balkans", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Reform and Growth Facility for Moldova", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "DT4UA", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "DT4UA", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Alignment with the EU 5G Cybersecurity Toolbox", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Extend the EU’s Cyber-Reserve to Ukraine and the Republic of Moldova", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Ukraine Facility", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "Ukraine Facility", "theme": "Cybersecurity/Cybercrime", "region": "EU Neighbourhood Countries" }, { "title": "EU-Moldova Security & Defence Partnership", "theme": "Cybersecurity/Cybercrime", "region": "EU Neighbourhood Countries" }, { "title": "EU-Moldova Security & Defence Partnership", "theme": "Security/Military/Defence", "region": "EU Neighbourhood Countries" }, { "title": "EU-Albania Security & Defence Partnership", "theme": "Cybersecurity/Cybercrime", "region": "EU Neighbourhood Countries" }, { "title": "EU-Albania Security & Defence Partnership", "theme": "Security/Military/Defence", "region": "EU Neighbourhood Countries" }, { "title": "EGOV4Ukraine", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "EU-North Macedonia Security & Defence Partnership", "theme": "Cybersecurity/Cybercrime", "region": "EU Neighbourhood Countries" }, { "title": "EU-North Macedonia Security & Defence Partnership", "theme": "Security/Military/Defence", "region": "EU Neighbourhood Countries" }, { "title": "CyberEast+", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Editnet - Inisght into tomorrow", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Global human rights-based implementation of online platform laws", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Global human rights-based implementation of online platform laws", "theme": "Regulation/Governance/Political", "region": "North America" }, { "title": "Global human rights-based implementation of online platform laws", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "Global human rights-based implementation of online platform laws", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "EU-UK Cyber Dialogue", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "EU-Norway Security & Defence Partnership", "theme": "Security/Military/Defence", "region": "EU Neighbourhood Countries" }, { "title": "EU-UK Security & Defence Partnership", "theme": "Security/Military/Defence", "region": "EU Neighbourhood Countries" }, { "title": "EU-UK FTA", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Black Sea Digital Connectivity Submarine Digital Cable", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "WiFi for Western Balkans (WiFi4WB)", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "AI Antennas", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "Administrative arrangement with Ofcom (UK/Norther Ireland) on enforcement of social media regulations", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Tallinn Mechanism", "theme": "Cybersecurity/Cybercrime", "region": "EU Neighbourhood Countries" }, { "title": "Tallinn Mechanism", "theme": "Security/Military/Defence", "region": "EU Neighbourhood Countries" }, { "title": "Western Balkans Cyber Capacity Campus", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "EU4Digital: Connecting Research and Education Communities (EaPConnect)", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "EU4Digital: Connecting Research and Education Communities (EaPConnect)", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "REDI: Rural Empowerment through Digital Inclusion", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "REDI: Rural Empowerment through Digital Inclusion", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "EU4Security Moldova", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "EU4Security Moldova", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Digital University – Open Ukrainian Initiative (DigiUni) project", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "SKYE Net -Skills and Knowledge for Youth Empowerment Network", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Upskilling digital competences and career management skills of disadvantaged youth in Georgia, Armenia and Moldova", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "EU Defence Innovation Scheme (EUDIS)", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Hub for European Defence Innovation (HEDI)", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Hub for European Defence Innovation (HEDI)", "theme": "Security/Military/Defence", "region": "EU Neighbourhood Countries" }, { "title": "European Digital innovation Hubs", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "EU4Digital Facility Phase I & II", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "EU4Digital Facility Phase I & II", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "CyberBalkans – EU Support to Cyber Capacity Building in the Western Balkans", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "CyberBalkans – EU Support to Cyber Capacity Building in the Western Balkans", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "CyberBalkans – EU Support to Cyber Capacity Building in the Western Balkans", "theme": "Cybersecurity/Cybercrime", "region": "EU Neighbourhood Countries" }, { "title": "EU4DigitalUA: capacity building, communication and data protection for Ukraine", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "EU4DigitalUA: capacity building, communication and data protection for Ukraine", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Training and Operational Partnership Against Organised Crime II (TOPCOP II)", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Western Balkans Partnership against Crime and Terrorism II (WB PACT II)", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Hiroshima AI Process", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Choose Europe Initiative", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Choose Europe Initiative", "theme": "Education/Skills/Research", "region": "Global" }, { "title": "World Semiconductor Council – Government / Authorities Meeting on Semiconductors (GAMS)", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Global Gateway Forum", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Establishment of a Digital Partnership Network", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Development of European Interoperability Framework", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Digital Europe Programme", "theme": "Education/Skills/Research", "region": "Global" }, { "title": "Horizon Europe", "theme": "Education/Skills/Research", "region": "Global" }, { "title": "AI & Energy (EU-ROK Clean Energy Ministerial)", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "AI & Energy (EU-ROK Clean Energy Ministerial)", "theme": "Regulation/Governance/Political", "region": "North-East Asia" }, { "title": "IRIS² Connectivity", "theme": "Infrastructure", "region": "Global" }, { "title": "Tallinn Cyber Diplomacy Summer School", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Global Initiative on the Future of the Internet (GIFI)", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Tanzania, Kenya, Nigeria Informal Digital Hub", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "EU Cyber Direct - The EU Cyber Diplomacy Initiative", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "EU Cyber Direct - The EU Cyber Diplomacy Initiative", "theme": "Education/Skills/Research", "region": "Global" }, { "title": "EU CyberNet", "theme": "Education/Skills/Research", "region": "Global" }, { "title": "G7 semiconductor Point of Contact group", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "G7 Quantum Technology Working Group", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Global Digital Health Certification Network (GDHCN)", "theme": "Infrastructure", "region": "Global" }, { "title": "Advancing the UN Framework of Responsible State Behaviour in Cyberspace: Contribution to UN OEWG ICT security/ UN Global Mechanism", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Engagement International Counter Ransomware Initiative (CRI)", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Mutual recognition agreements (MRA) regarding product cybersecurity", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Mutual recognition agreements (MRA) regarding product cybersecurity", "theme": "Cybersecurity/Cybercrime", "region": "Global" }, { "title": "Global Partnership on AI and OECD", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "G7 Cybersecurity Working Group", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Support program for digital transformation of Moldova", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Support program for digital transformation of Moldova", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "EU election observation missions (EOM) social media observation", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Advance partnerships to bolster resilience against FIMI", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Promote the Open Internet Stack", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Follow-up and review of the implementation of the Global Digital Compact (GDC) commitments", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "Cross-Border Access to Electronic Evidence SIRIUS III", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "EU-Smart Africa Adminsitrative Agreement", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "EU-Australia Digital Dialogue", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-India Cyber Dialogue", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-India TTC", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-ASEAN Sustainable Connectivity Package (SCOPE) Investment Facility", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-ASEAN Sustainable Connectivity Package (SCOPE) Investment Facility", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "SCOPE Digital: Earth Observation services platform for Southeast Asia", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "SCOPE Digital: Earth Observation services platform for Southeast Asia", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-Singapore AI Safety Cooperation Administrative Arrangement", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-Singapore AI Safety Cooperation Administrative Arrangement", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Memorandum of Understanding on semiconductors with India", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Memorandum of Understanding on semiconductors with India", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-Singapore Digital Partnership", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Philippines Digital Economy Package", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Philippines Digital Economy Package", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "6G-IA and TAICS MoU", "theme": "Regulation/Governance/Political", "region": "North-East Asia" }, { "title": "6G-IA and TAICS MoU", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "EU-Indonesia FTA", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-Indonesia FTA", "theme": "Cybersecurity/Cybercrime", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-New Zealand FTA", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Boosting digital connectivity in the Pacific", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Connectivity Revolution: Transforming Lives in Bangladesh", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU Copernicus Earth Observation programme in the Philippines (CopPhil)", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU Copernicus Earth Observation programme in the Philippines (CopPhil)", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Nusantara-Indonesia", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Expansion of SiC Power Fab to worlds largest 200-mm-semiconductor production plant in Malaysia", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Administrative arrangement with Australian eSafety Commissioner on enforcement of social media regulations", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "GANANA Project", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "SCOPE (EU-ASEAN Sustainable Connectivity Package) Digital", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "SCOPE (EU-ASEAN Sustainable Connectivity Package) Digital", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "India-EU Startup Partnership", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "India-EU Intent of Cooperation (IoC) on High-Performance Computing (HPC)", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "India-EU Space Dialogue", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "India-EU Space Dialogue", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "India-EU Administrative Arrangement on Advanced Electronic Signatures and Seals.", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "India-EU Security and Defence Partnership", "theme": "Security/Military/Defence", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "India-EU Security of Information Agreement", "theme": "Cybersecurity/Cybercrime", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "India - EU Defence Industry Forum", "theme": "Cybersecurity/Cybercrime", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "India - EU Defence Industry Forum", "theme": "Security/Military/Defence", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-India Business Forum", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-India Comprehensive Framework of Cooperation on Mobility", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Euromed Police", "theme": "Education/Skills/Research", "region": "MENA" }, { "title": "Euromed Police", "theme": "Cybersecurity/Cybercrime", "region": "MENA" }, { "title": "CyberSouth+", "theme": "Infrastructure", "region": "MENA" }, { "title": "CyberSouth+", "theme": "Regulation/Governance/Political", "region": "MENA" }, { "title": "CyberSouth+", "theme": "Education/Skills/Research", "region": "MENA" }, { "title": "CyberSouth+", "theme": "Cybersecurity/Cybercrime", "region": "MENA" }, { "title": "EU-Jordan Comprehensive and Strategic Partnership", "theme": "Regulation/Governance/Political", "region": "MENA" }, { "title": "EU-Tunisia Comprehensive and Strategic Partnership", "theme": "Regulation/Governance/Political", "region": "MENA" }, { "title": "EU-Egypt Comprehensive and Strategic Partnership", "theme": "Regulation/Governance/Political", "region": "MENA" }, { "title": "MEDUSA Submarine Cable", "theme": "Infrastructure", "region": "MENA" }, { "title": "EU Tech Business offer in the New Pact for the Mediterranean", "theme": "Regulation/Governance/Political", "region": "MENA" }, { "title": "EU-Africa-India digital corridor (Blue-Raman)", "theme": "Infrastructure", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-Africa-India digital corridor (Blue-Raman)", "theme": "Infrastructure", "region": "MENA" }, { "title": "EU-United States Cyber Dialogue", "theme": "Regulation/Governance/Political", "region": "North America" }, { "title": "EU-US TTC", "theme": "Regulation/Governance/Political", "region": "North America" }, { "title": "MIRAQLS project", "theme": "Education/Skills/Research", "region": "North America" }, { "title": "FoQaCiA  project", "theme": "Education/Skills/Research", "region": "North America" }, { "title": "HYPERSPACE project", "theme": "Education/Skills/Research", "region": "North America" }, { "title": "EU-Canada Digital Partnership", "theme": "Regulation/Governance/Political", "region": "North America" }, { "title": "ENISA-CISA Working Arrangement", "theme": "Cybersecurity/Cybercrime", "region": "North America" }, { "title": "EU-India-Canada Cooperation Arrangement on AI Safety", "theme": "Regulation/Governance/Political", "region": "North America" }, { "title": "EU-India-Canada Cooperation Arrangement on AI Safety", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "Semiconductors Early warning mechanism on supply chain & public subsidies", "theme": "Education/Skills/Research", "region": "North America" }, { "title": "Semiconductors Early warning mechanism on supply chain & public subsidies", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "EU-Japan Cyber Dialogue", "theme": "Cybersecurity/Cybercrime", "region": "North-East Asia" }, { "title": "EU-Republic of Korea Cyber Dialogue", "theme": "Cybersecurity/Cybercrime", "region": "North-East Asia" }, { "title": "EU-Japan Digital Partnership", "theme": "Regulation/Governance/Political", "region": "North-East Asia" }, { "title": "EU-Republic of Korea Digital Partnership", "theme": "Regulation/Governance/Political", "region": "North-East Asia" }, { "title": "EU-Japan Security & Defence Partnership", "theme": "Cybersecurity/Cybercrime", "region": "North-East Asia" }, { "title": "EU-Japan Security & Defence Partnership", "theme": "Security/Military/Defence", "region": "North-East Asia" }, { "title": "EU-South Korea Security & Defence Partnership", "theme": "Cybersecurity/Cybercrime", "region": "North-East Asia" }, { "title": "EU-South Korea Security & Defence Partnership", "theme": "Security/Military/Defence", "region": "North-East Asia" }, { "title": "6G research and innovation aligned 2026 call", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "6G research and innovation cooperation on 6G AI powered RAN with Japan and South Korea", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "EU-Japan Quantum Computing Collaboration", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "EU-Republic of Korea Quantum Technology Calls", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "6G Arrow", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "6G Mirai", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "EU-Republic of Korea Digital Trade Agreement", "theme": "Regulation/Governance/Political", "region": "North-East Asia" }, { "title": "EU-Singapore Digital Trade Agreement", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "EU-Japan Economic Partnership Agreement", "theme": "Regulation/Governance/Political", "region": "North-East Asia" }, { "title": "HANAMI Project", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "EU4DigitalUA", "theme": "Infrastructure", "region": "EU Neighbourhood Countries" }, { "title": "EU4DigitalUA", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "EU4DigitalUA", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "EU4DigitalUA", "theme": "Cybersecurity/Cybercrime", "region": "EU Neighbourhood Countries" }, { "title": "Administrative Agreement for the Azerbaijan Rapid Technical Assistance Facility (AZTAF)", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Administrative Agreement for the Azerbaijan Rapid Technical Assistance Facility (AZTAF)", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "GovTech4All", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "GovTech4All", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Improving cyber resilience in Eastern Partnership countries", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Improving cyber resilience in Eastern Partnership countries", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "“Knowledge Hub Digital” facility (KHD)", "theme": "Regulation/Governance/Political", "region": "MENA" }, { "title": "“Knowledge Hub Digital” facility (KHD)", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "“Knowledge Hub Digital” facility (KHD)", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "“Knowledge Hub Digital” facility (KHD)", "theme": "Education/Skills/Research", "region": "MENA" }, { "title": "“Knowledge Hub Digital” facility (KHD)", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "“Knowledge Hub Digital” facility (KHD)", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "EU-Brazil Digital Dialogue", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "EU-Brazil Cyber Dialogue", "theme": "Cybersecurity/Cybercrime", "region": "South America" }, { "title": "EU-Mexico Digital Dialogue", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "EU-Argentina Digital Dialogue", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "Colombia  and Brazil Informal Digital Hub", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "EU-Latin America and Caribbean Digital Alliance", "theme": "Infrastructure", "region": "South America" }, { "title": "EU-Latin America and Caribbean Digital Alliance", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "EU-Latin America and Caribbean Digital Alliance", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "SPIDER EU-LAC Digital Partnership", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "SPIDER EU-LAC Digital Partnership", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "BELLA", "theme": "Infrastructure", "region": "South America" }, { "title": "Colombia Digital Economy Package", "theme": "Infrastructure", "region": "South America" }, { "title": "Colombia Digital Economy Package", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "Colombia Digital Economy Package", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "Colombia Digital Economy Package", "theme": "Cybersecurity/Cybercrime", "region": "South America" }, { "title": "EU-Chile FTA", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "Paz Total Connectivity in Colombia", "theme": "Infrastructure", "region": "South America" }, { "title": "Paz Total Connectivity in Colombia", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "CopernicusLAC Chile Centre AND Panama", "theme": "Infrastructure", "region": "South America" }, { "title": "EU-Costa Rica MoU on satellite connectivity", "theme": "Infrastructure", "region": "South America" }, { "title": "LAC4", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "EU-LAC Supercomputing Network", "theme": "Infrastructure", "region": "South America" }, { "title": "EU-LAC Supercomputing Network", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "LAC Connectivity Toolbox Implementation Guidelines", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "Central American Digital Trade Platform (PDCC)", "theme": "Infrastructure", "region": "South America" }, { "title": "Green Amazon/Amazonia Verde in Brazil", "theme": "Infrastructure", "region": "South America" }, { "title": "EU-LAC Digital Accelerator in Latin America and the Caribbean", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "EU-LAC High-level Policy Dialogue", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "EU-LAC Innovation Cooperation Initiative", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "EU–CELAC Ministerial Meeting on Research and Innovation", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "EU–CELAC Ministerial Meeting on Research and Innovation", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "EL PAcCTO 1.0 and 2.0", "theme": "Regulation/Governance/Political", "region": "South America" }, { "title": "EL PAcCTO 1.0 and 2.0", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "EL PAcCTO 1.0 and 2.0", "theme": "Cybersecurity/Cybercrime", "region": "South America" }, { "title": "Fortalecimiento y Desarrollo de Capacidades en America Latina y el Caribe en Materia de Ciberseguridad", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "Fortalecimiento y Desarrollo de Capacidades en America Latina y el Caribe en Materia de Ciberseguridad", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Fortalecimiento y Desarrollo de Capacidades en America Latina y el Caribe en Materia de Ciberseguridad", "theme": "Cybersecurity/Cybercrime", "region": "South America" }, { "title": "Fortalecimiento y Desarrollo de Capacidades en America Latina y el Caribe en Materia de Ciberseguridad", "theme": "Cybersecurity/Cybercrime", "region": "EU Neighbourhood Countries" }, { "title": "Democratic Republic of Congo Digital Economy Package", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "Africa-Europe Digital Regulators Partnership in Sub-Saharan Africa", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "AfricaConnect4 in Sub-Saharan Africa", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "AfricaConnect4 in Sub-Saharan Africa", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "Construction of data center in Nouakchott and submarine cable in Mauritania", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "Construction of fibre-optic cables in the Democratic Republic of Congo, Zambia, Zimbabwe, Malawi and Mozambique", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "Rehabilitation and modernisation of the national transmission grid in Ethiopia", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "Extension of digital connectivity in the Democratic Republic of Congo", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "Extension of digital connectivity in the Democratic Republic of Congo", "theme": "Cybersecurity/Cybercrime", "region": "Sub-Saharan Africa" }, { "title": "Somalia connectivity expansion", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "AI for Public Good", "theme": "Education/Skills/Research", "region": "South America" }, { "title": "AI for Public Good", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "AI for Public Good", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "AI for Public Good", "theme": "Education/Skills/Research", "region": "Central Asia" }, { "title": "AI for Public Good", "theme": "Education/Skills/Research", "region": "MENA" }, { "title": "AI for Public Good", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "AI for Public Good", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "International Network of AI Safety Institutes", "theme": "Regulation/Governance/Political", "region": "Global" }, { "title": "International Network of AI Safety Institutes", "theme": "Regulation/Governance/Political", "region": "North America" }, { "title": "International Network of AI Safety Institutes", "theme": "Regulation/Governance/Political", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "International Network of AI Safety Institutes", "theme": "Regulation/Governance/Political", "region": "North-East Asia" }, { "title": "International Network of AI Safety Institutes", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "International Network of AI Safety Institutes", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "International Network of AI Safety Institutes", "theme": "Education/Skills/Research", "region": "Global" }, { "title": "International Network of AI Safety Institutes", "theme": "Education/Skills/Research", "region": "North America" }, { "title": "International Network of AI Safety Institutes", "theme": "Education/Skills/Research", "region": "Indo-Pacific (includes South-East Asia)" }, { "title": "International Network of AI Safety Institutes", "theme": "Education/Skills/Research", "region": "North-East Asia" }, { "title": "International Network of AI Safety Institutes", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "International Network of AI Safety Institutes", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "Kenya Digital Economy Package", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "Kenya Digital Economy Package", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "Kenya Digital Economy Package", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "Nigeria Digital Economy Package", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "Nigeria Digital Economy Package", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "Nigeria Digital Economy Package", "theme": "Cybersecurity/Cybercrime", "region": "Sub-Saharan Africa" }, { "title": "AI Hub for Sustainable Development and AI collaboration with Smart Africa", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "Africa-EU space partnership programme", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "Africa-EU space partnership programme", "theme": "Regulation/Governance/Political", "region": "EU Neighbourhood Countries" }, { "title": "Africa-EU space partnership programme", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "Africa-EU space partnership programme", "theme": "Education/Skills/Research", "region": "EU Neighbourhood Countries" }, { "title": "EAC DPI Acceleration Mechanism (DPI-AM)", "theme": "Infrastructure", "region": "Sub-Saharan Africa" }, { "title": "EAC DPI Acceleration Mechanism (DPI-AM)", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "iPRIS: ICT Policy & Regulation - Institutional Strengthening", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "iPRIS: ICT Policy & Regulation - Institutional Strengthening", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "Data Governance in Africa", "theme": "Regulation/Governance/Political", "region": "MENA" }, { "title": "Data Governance in Africa", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "Data Governance in Africa", "theme": "Education/Skills/Research", "region": "MENA" }, { "title": "Data Governance in Africa", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "Criminal Justice Response to Terrorism (CT JUST)", "theme": "Regulation/Governance/Political", "region": "MENA" }, { "title": "Criminal Justice Response to Terrorism (CT JUST)", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "Criminal Justice Response to Terrorism (CT JUST)", "theme": "Education/Skills/Research", "region": "MENA" }, { "title": "Criminal Justice Response to Terrorism (CT JUST)", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "Criminal Justice Response to Terrorism (CT JUST)", "theme": "Security/Military/Defence", "region": "MENA" }, { "title": "Criminal Justice Response to Terrorism (CT JUST)", "theme": "Security/Military/Defence", "region": "Sub-Saharan Africa" }, { "title": "Countering Illicit Trafficking and Transnational Organised Crime in Africa - Component 3: Cybercrime", "theme": "Regulation/Governance/Political", "region": "MENA" }, { "title": "Countering Illicit Trafficking and Transnational Organised Crime in Africa - Component 3: Cybercrime", "theme": "Regulation/Governance/Political", "region": "Sub-Saharan Africa" }, { "title": "Countering Illicit Trafficking and Transnational Organised Crime in Africa - Component 3: Cybercrime", "theme": "Education/Skills/Research", "region": "MENA" }, { "title": "Countering Illicit Trafficking and Transnational Organised Crime in Africa - Component 3: Cybercrime", "theme": "Education/Skills/Research", "region": "Sub-Saharan Africa" }, { "title": "Countering Illicit Trafficking and Transnational Organised Crime in Africa - Component 3: Cybercrime", "theme": "Security/Military/Defence", "region": "MENA" }, { "title": "Countering Illicit Trafficking and Transnational Organised Crime in Africa - Component 3: Cybercrime", "theme": "Security/Military/Defence", "region": "Sub-Saharan Africa" }, { "title": "EU US Joint Guidance or Online Platforms on Protecting Human Rights Defenders Online", "theme": "Regulation/Governance/Political", "region": "North America" }, { "title": "BraveTechEU", "theme": "Security/Military/Defence", "region": "EU Neighbourhood Countries" }]
+    Promise.all([
+      fetch('https://raw.githubusercontent.com/euissR/analysis_2026_02-CB-cyber-projects/refs/heads/main/data_full_regions.geojson').then(r => r.json()),
+      fetch('https://raw.githubusercontent.com/euissR/analysis_2026_02-CB-cyber-projects/refs/heads/main/data_full.json').then(r => r.json())
+    ]).then(([geojson, csv]) => {
+      RAW = geojson;
+      dotData = csv;
+      data = RAW.features.map(f => ({        // ← was `const data = ...` at top level
+        region: f.properties.region,
+        theme: f.properties.theme,
+        n: f.properties.n,
+        perc: f.properties.perc,
+        lng: f.geometry.coordinates[0],
+        lat: f.geometry.coordinates[1]
+      })).filter(d => d.n > 0);
+      initMap();
+      initDotplot();
+    });
 
     // ─────────────────────────────────────────────
     // STATE
@@ -432,12 +436,12 @@
 
     function initMap() {
       const W = mapContainer.clientWidth;
-      const H = Math.round(W * 0.5);
+      const H = mapSvg.node().clientHeight;
       mapSvg.attr('viewBox', `0 0 ${W} ${H}`).attr('height', H);
 
-      const projection = d3.geoNaturalEarth1()
+      const projection = d3.geoEisenlohr()
         .scale(W / 6.5)
-        .translate([W / 2, H / 2]);
+        .translate([W / 2 - 30, H / 2 + 100]);
 
       const path = d3.geoPath().projection(projection);
 
@@ -551,54 +555,74 @@
     const DOT_R = 6;
     const DOT_GAP = 2;
     const DOT_STEP = DOT_R * 2 + DOT_GAP;
-    const DOTS_PER_ROW = 50;
+    const DOTS_PER_ROW = 40;
     const THEME_GAP = 18;
     const LABEL_W = 110;
     const DOT_AREA_PAD_R = 16;
 
-    function initDotplot() {
-      const containerW = document.getElementById('dotplot-container').clientWidth - 24;
-      const themeOrder = THEMES;
+    // ─────────────────────────────────────────────
+    // DOTPLOT — shared renderer
+    // axis: 'theme' | 'region'
+    // ─────────────────────────────────────────────
+    function buildDotplot({ axis, containerId, svgId, dpKey }) {
+      const container = document.getElementById(containerId);
+      const containerW = container.clientWidth - 24;
 
-      // Build per-theme groups from raw CSV rows, sorted by region
-      const regionOrder = [...new Set(data.map(d => d.region))];
-      const themeData = [];
+      const REGIONS = [
+        "Arctic", "Central Asia", "EU Neighbourhood Countries", "Global",
+        "Indo-Pacific (includes South-East Asia)", "MENA", "North America",
+        "North-East Asia", "South America", "Sub-Saharan Africa"
+      ];
+
+      // Build group keys + labels + colors
+      let groups;
+      if (axis === 'theme') {
+        groups = THEMES.map(t => ({
+          key: t,
+          label: SHORT_LABELS[t],
+          color: THEME_COLORS[t],
+          dots: dotData.filter(d => d.theme === t)
+            .sort((a, b) => REGIONS.indexOf(a.region) - REGIONS.indexOf(b.region))
+        }));
+      } else {
+        groups = REGIONS.map(r => ({
+          key: r,
+          label: REGION_SHORT[r] || r,
+          color: '#888',
+          dots: dotData.filter(d => d.region === r)
+            .sort((a, b) => THEMES.indexOf(a.theme) - THEMES.indexOf(b.theme))
+        }));
+      }
+
+      // Assign grid positions per group
       let maxCols = 0;
-
-      themeOrder.forEach(theme => {
-        const themeDots = dotData
-          .filter(d => d.theme === theme)
-          .sort((a, b) => regionOrder.indexOf(a.region) - regionOrder.indexOf(b.region));
-
-        themeDots.forEach((dot, i) => {
-          dot.col = i % DOTS_PER_ROW;
-          dot.row = Math.floor(i / DOTS_PER_ROW);
+      groups.forEach(g => {
+        g.dots.forEach((dot, i) => {
+          dot[`col_${axis}`] = i % DOTS_PER_ROW;
+          dot[`row_${axis}`] = Math.floor(i / DOTS_PER_ROW);
         });
-
-        const numRows = Math.ceil(themeDots.length / DOTS_PER_ROW);
-        maxCols = Math.max(maxCols, Math.min(themeDots.length, DOTS_PER_ROW));
-        themeData.push({ theme, dots: themeDots, numRows });
+        g.numRows = Math.ceil(g.dots.length / DOTS_PER_ROW);
+        maxCols = Math.max(maxCols, Math.min(g.dots.length, DOTS_PER_ROW));
       });
 
-      // Compute y offsets
+      // Y offsets per group band
       let yOffset = DOT_R + 4;
-      const themeYOffset = [];
-      themeData.forEach(({ numRows }) => {
-        themeYOffset.push(yOffset);
-        yOffset += numRows * DOT_STEP + THEME_GAP;
+      groups.forEach(g => {
+        g.yBase = yOffset;
+        yOffset += g.numRows * DOT_STEP + THEME_GAP;
       });
       const totalH = yOffset + 8;
 
       const svgW = LABEL_W + maxCols * DOT_STEP + DOT_AREA_PAD_R;
-      const dpSvg = d3.select('#dotplot-svg')
+      const dpSvg = d3.select(`#${svgId}`)
         .attr('width', Math.max(svgW, containerW))
         .attr('height', totalH);
 
-      themeData.forEach(({ theme, dots, numRows }, ti) => {
-        const yBase = themeYOffset[ti];
-        const color = THEME_COLORS[theme];
+      groups.forEach((g, gi) => {
+        const { key, label, color, dots, numRows, yBase } = g;
 
-        if (ti > 0) {
+        // Separator
+        if (gi > 0) {
           dpSvg.append('line')
             .attr('class', 'dot-axis-line')
             .attr('x1', 0)
@@ -607,13 +631,15 @@
             .attr('y2', yBase - THEME_GAP / 2 - 2);
         }
 
+        // Group label
         const bandH = numRows * DOT_STEP;
+        // For region axis, colour dots by theme; label is in region color (neutral)
         dpSvg.append('text')
           .attr('class', 'dot-theme-label')
           .attr('x', 0)
           .attr('y', yBase + bandH / 2)
-          .attr('fill', color)
-          .text(SHORT_LABELS[theme]);
+          .attr('fill', axis === 'theme' ? color : '#555')
+          .text(label);
 
         dpSvg.append('g')
           .selectAll('circle')
@@ -622,10 +648,10 @@
           .attr('class', 'dot-item')
           .attr('data-theme', d => d.theme)
           .attr('data-key', d => d.region + '|' + d.theme)
-          .attr('cx', d => LABEL_W + d.col * DOT_STEP + DOT_R)
-          .attr('cy', d => yBase + d.row * DOT_STEP)
+          .attr('cx', d => LABEL_W + d[`col_${axis}`] * DOT_STEP + DOT_R)
+          .attr('cy', d => yBase + d[`row_${axis}`] * DOT_STEP)
           .attr('r', DOT_R)
-          .attr('fill', color)
+          .attr('fill', d => axis === 'theme' ? color : THEME_COLORS[d.theme])
           .attr('stroke', '#fff')
           .attr('stroke-width', 1.2)
           .on('mouseenter', function (event, d) {
@@ -648,7 +674,12 @@
           });
       });
 
-      window._dpSvg = dpSvg;
+      window[dpKey] = dpSvg;
+    }
+
+    function initDotplot() {
+      buildDotplot({ axis: 'theme', containerId: 'dotplot-theme-container', svgId: 'dotplot-svg', dpKey: '_dpSvg' });
+      buildDotplot({ axis: 'region', containerId: 'dotplot-region-container', svgId: 'dotplot-region-svg', dpKey: '_dpSvgRegion' });
     }
 
     // ─────────────────────────────────────────────
@@ -692,6 +723,21 @@
         });
       }
 
+      // Region dotplot dots
+      if (window._dpSvgRegion) {
+        window._dpSvgRegion.selectAll('.dot-item').attr('opacity', d => {
+          if (!filterTheme && !filterKey) return 1;
+          if (filterKey) {
+            const key = d.region + '|' + d.theme;
+            if (key === filterKey) return 1;
+            if (d.theme === filterTheme) return 0.3;
+            return 0.08;
+          }
+          if (d.theme === filterTheme) return 1;
+          return 0.1;
+        });
+      }
+
       // Legend items
       document.querySelectorAll('.legend-item').forEach(el => {
         const t = el.querySelector('span').textContent;
@@ -707,8 +753,6 @@
     // ─────────────────────────────────────────────
     // INIT
     // ─────────────────────────────────────────────
-    initMap();
-    initDotplot();
 
     // Responsive resize
     let resizeTimer;
@@ -717,6 +761,7 @@
       resizeTimer = setTimeout(() => {
         mapSvg.selectAll('*').remove();
         document.getElementById('dotplot-svg').innerHTML = '';
+        document.getElementById('dotplot-region-svg').innerHTML = '';
         initMap();
         initDotplot();
       }, 300);
